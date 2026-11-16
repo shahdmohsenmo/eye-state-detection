@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+# datasets are not part of the repo
+data/
+*.zip
+# MediaPipe model is downloaded separately (see README)
+models/*.task
