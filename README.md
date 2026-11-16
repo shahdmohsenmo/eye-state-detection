@@ -22,6 +22,14 @@ Final model: **v3**, trained on our dataset + 70% of CEW.
 - AUC on CEW test: v3 **0.997**, EAR 0.995
 - Each CNN does well on data like its own training data (domain shift); training on both closed the gap.
 
+| First model on our test set (99.79%) | First model on CEW (87.85%, before v3) |
+|---|---|
+| ![Confusion matrix, test set](results/confusion_matrix_test_v1.png) | ![Confusion matrix, CEW](results/confusion_matrix_cew_v1.png) |
+
+| Training curves (first model) | EAR on CEW |
+|---|---|
+| ![Training curves](results/training_curves.png) | ![EAR histogram](results/ear_histogram_cew.png) |
+
 **Speed** (full pipeline, laptop CPU AMD Ryzen, no GPU): **46.8 ms per frame ≈ 21 FPS**
 (MediaPipe 21.5 ms · eye crop 0.5 ms · pre-processing 2.9 ms · MobileNetV3-Small 21.8 ms · EAR 0.1 ms).
 Model size: **1.52 M parameters, 6.2 MB**.
@@ -40,8 +48,9 @@ Model size: **1.52 M parameters, 6.2 MB**.
 demo.py          live webcam demo (model v3), blink counter + drowsiness alarm
 benchmark.py     measures the time of every pipeline stage on your computer
 requirements.txt
+split.csv        person-level train / val / test split of our dataset (path, label, person, split)
 models/          put the two model files here (see Setup)
-notebooks/       Google Colab notebooks: training, testing, CEW, EAR, v3
+notebooks/       Colab notebook: model v2, CEW test, EAR comparison, final model v3
 results/         confusion matrices, training curves, EAR histogram
 ```
 
@@ -53,7 +62,7 @@ pip install -r requirements.txt
 
 Put these two files in `models/`:
 
-- `eye_state_mnv3s_v3.pt`: the trained model (included in this repo, or from the release page)
+- `eye_state_mnv3s_v3.pt`: the trained model
 - `face_landmarker.task`: MediaPipe model, download from
   https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 
