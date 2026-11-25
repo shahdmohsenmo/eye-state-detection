@@ -55,10 +55,21 @@ All: MobileNetV3-Small pretrained on ImageNet, last layer 1000 → 2, grayscale 
 |---|---|---|
 | Our dataset | 5,452 eye crops: 4,000 MRL Eye (infrared, 16 persons) + 1,452 colour images | by person (`split.csv`), 0 near-duplicates between train and val/test |
 | CEW | 2,423 faces, 100 × 100 px, closed / open | 70% train (15% of it validation) / 30% test |
-| FL3D | frames of the NITYMED night-driving videos, labelled alert / microsleep / yawning | by driver/video group when the folders allow it, else random (the notebook prints which) |
+| FL3D | frames of the NITYMED night-driving videos, labelled alert / microsleep / yawning | by video: every video's frames go to one split only (25 train / 5 validation / 14 test videos; overlap checked = 0). Driver IDs are not in the file names, so the split is by video, not by driver |
 | NITYMED | real night-driving videos with microsleeps | system test of the full pipeline (logs, events, timelines) |
 
 FL3D labels are mapped `alert → open`, `microsleep → closed`; `yawning` frames are left out because the eye state is not defined there. Datasets are not included in this repository. CEW is for research use only and must not be redistributed; NITYMED/FL3D must be cited as their pages ask.
+
+## Alarm test on real driving videos
+
+Notebook part 14 (`notebooks/cell_14_split_and_alarm_check.py`, `notebooks/cell_14b_check_false_alarms.py`) compares the system's closures with the FL3D frame labels on the 4 NITYMED test videos (8.7 labelled minutes; `frameN.jpg` = video frame N):
+
+| Measure | Result |
+|---|---|
+| Labelled microsleeps ≥ 0.5 s detected | 47 / 48 (97.9%), median delay 0.58 s |
+| Labelled microsleeps ≥ 1.5 s with an alarm | 20 / 23 (87%), median delay 1.58 s (alarm waits 1.5 s by design) |
+| False alarms | 3 in 8.7 min (≈ 21 / hour, rough), all while the driver laughs or yawns with squeezed eyes |
+| FL3D split overlap (train/val/test videos) | 0 / 0 / 0 |
 
 ## Demo logic (`demo.py`)
 
