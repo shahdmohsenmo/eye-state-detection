@@ -1,1 +1,1 @@
-Put eye_state_mnv3s_v3.pt and face_landmarker.task here (see the main README).
+Put eye_state_final.pt and face_landmarker.task here (both written by the final notebook).

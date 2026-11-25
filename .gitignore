@@ -6,3 +6,5 @@ data/
 *.zip
 # MediaPipe model is downloaded separately (see README)
 models/*.task
+logs/*.csv
+logs/*.json

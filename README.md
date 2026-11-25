@@ -1,91 +1,81 @@
-# Real-Time Eye State Detection (Open / Closed) for Driver Drowsiness
+# Real-Time Eye State Detection for Driver Drowsiness
 
-Graduation project. A webcam frame goes through **MediaPipe Face Landmarker**, both eyes are cropped, and a fine-tuned **MobileNetV3-Small** decides whether each eye is open or closed. If the eyes stay closed longer than 1.5 s, the system raises a drowsiness alarm.
-
-```
-Webcam frame → MediaPipe (478 face landmarks) → eye crops (2.2 × eye width, rotation-aligned)
-             → MobileNetV3-Small (P(open) per eye, average of both) → blink counter / drowsiness alarm
-```
-
-## Results
-
-Final model: **v3**, trained on our dataset + 70% of CEW.
-
-| Method | Trained on | Our test set (971 eye images, unseen persons) | CEW test (726 faces) |
-|---|---|---|---|
-| CNN v2 | Our data | 99.79% | 86.64% |
-| CNN | CEW 70% only | 80.12% | 98.76% |
-| **CNN v3 (final)** | **Both** | **99.79%** | **97.25%** |
-| EAR baseline (tuned threshold) | No training | needs a full face | 95.32% |
-
-- Closed eyes missed on our test set: **0**
-- AUC on CEW test: v3 **0.997**, EAR 0.995
-- Each CNN does well on data like its own training data (domain shift); training on both closed the gap.
-
-| First model on our test set (99.79%) | First model on CEW (87.85%, before v3) |
-|---|---|
-| ![Confusion matrix, test set](results/confusion_matrix_test_v1.png) | ![Confusion matrix, CEW](results/confusion_matrix_cew_v1.png) |
-
-| Training curves (first model) | EAR on CEW |
-|---|---|
-| ![Training curves](results/training_curves.png) | ![EAR histogram](results/ear_histogram_cew.png) |
-
-**Speed** (full pipeline, laptop CPU AMD Ryzen, no GPU): **46.8 ms per frame ≈ 21 FPS**
-(MediaPipe 21.5 ms · eye crop 0.5 ms · pre-processing 2.9 ms · MobileNetV3-Small 21.8 ms · EAR 0.1 ms).
-Model size: **1.52 M parameters, 6.2 MB**.
-
-## Method
-
-- **Data:** 5,452 pre-cropped eye images (2,726 closed / 2,726 open): 4,000 from the MRL Eye Dataset (16 persons) + 1,452 colour images from a second source.
-- **Split by person:** 3,747 train / 734 validation / 971 test. A perceptual-hash check found 0 near-duplicates between train and val/test.
-- **Model:** MobileNetV3-Small pretrained on ImageNet, last layer 1000 → 2 classes, grayscale 112 × 112 input, BatchNorm momentum 0.1.
-- **Training:** AdamW (lr 3e-4, weight decay 1e-4), cosine schedule, 15 epochs, best checkpoint on validation accuracy. Augmentation: random crop, flip, rotation ±10°, brightness/contrast, blur and low-resolution simulation.
-- **External test:** CEW (Closed Eyes in the Wild), full faces through the same MediaPipe pipeline.
-
-## Repository
+A webcam frame goes through **MediaPipe Face Landmarker**, both eyes are cropped, and a fine-tuned **MobileNetV3-Small** gives the probability that the eyes are open. A frame-rate-independent tracker turns that into eye state, blink / microsleep / long-closure events, PERCLOS and alarms, and writes a per-frame log for the fusion layer.
 
 ```
-demo.py          live webcam demo (model v3), blink counter + drowsiness alarm
-benchmark.py     measures the time of every pipeline stage on your computer
+webcam → MediaPipe (478 landmarks) → 2 eye crops (2.2 × eye width, rotation-aligned) → MobileNetV3-Small
+       → time-based smoothing → OPEN / CLOSED with hysteresis → events, PERCLOS, alarms → CSV / JSON log
+```
+
+## Folder
+
+```
+notebooks/Eye_State_Detection_Final.ipynb   the whole project: data, 5 models, model selection, thresholds, tests, video test
+demo.py                            live demo (reads config/demo_config.json)
+benchmark.py                       time of every pipeline stage on your computer
 requirements.txt
-split.csv        person-level train / val / test split of our dataset (path, label, person, split)
-models/          put the two model files here (see Setup)
-notebooks/       Eye_State_Detection_Full.ipynb: the whole project in one clean Colab notebook;
-                 v2_cew_ear_v3.ipynb: the original experiment notebook
-results/         confusion matrices, training curves, EAR histogram
+models/        v1.pt … v4.pt, eye_state_final.pt, face_landmarker.task      (written by the notebook)
+config/        demo_config.json: crop scale, threshold, hysteresis, timings  (written by the notebook)
+results/       tables (.csv), confusion matrices and training curves for every model, video timelines
+logs/          per-frame CSV and event JSON (demo sessions and the video test)
+README_results.md                  all numbers of the last notebook run       (written by the notebook)
+notebooks/history/                 the earlier experiment notebook (v2, CEW, EAR, v3)
 ```
 
-## Setup
+## How to run
 
-```bash
-pip install -r requirements.txt
-```
+1. Open `Eye_State_Detection_Final.ipynb` in Google Colab, choose a T4 GPU, **Run all**.
+   It reads the original files in `eye_project/` (dataset zip, CEW zip, `split.csv`, face model) and writes everything into `eye_project/Eye_State_Detection_Final/`.
+   `RETRAIN = False` reuses models already in `models/`; delete a model file (or set `RETRAIN = True`) to train it again.
+   FL3D and NITYMED are downloaded from Kaggle with `kagglehub`; if Colab asks, add `KAGGLE_USERNAME` and `KAGGLE_KEY` under Secrets.
+2. Copy `models/` and `config/` from the Drive folder next to `demo.py` and run:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   ```bash
+   python demo.py
+   ```
 
-Put these two files in `models/`:
+## Models
 
-- `eye_state_mnv3s_v3.pt`: the trained model
-- `face_landmarker.task`: MediaPipe model, download from
-  https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+| Model | Training data | Augmentation |
+|---|---|---|
+| v1 | our dataset | crop, flip, rotation ±10°, brightness/contrast |
+| v2 | our dataset | v1 + Gaussian blur + low-resolution simulation |
+| cew_only | CEW train split | as v2 |
+| v3 | our dataset + CEW train split | as v2 |
+| v4 | our dataset + CEW train split + FL3D train drivers | as v2 |
 
-Run:
+All: MobileNetV3-Small pretrained on ImageNet, last layer 1000 → 2, grayscale 112 × 112, AdamW (lr 3e-4, weight decay 1e-4), cosine schedule, 15 epochs, best epoch on validation, seed 0.
+**The final model is the one with the best mean validation accuracy**; test sets are only used for reporting. All numbers are in `README_results.md` after a run.
 
-```bash
-python demo.py
-```
+## Data
 
-Press **Q** or **Esc** to quit. If the wrong camera opens, change `CAMERA_INDEX` in `demo.py`.
+| Dataset | Content | Split |
+|---|---|---|
+| Our dataset | 5,452 eye crops: 4,000 MRL Eye (infrared, 16 persons) + 1,452 colour images | by person (`split.csv`), 0 near-duplicates between train and val/test |
+| CEW | 2,423 faces, 100 × 100 px, closed / open | 70% train (15% of it validation) / 30% test |
+| FL3D | frames of the NITYMED night-driving videos, labelled alert / microsleep / yawning | by driver/video group when the folders allow it, else random (the notebook prints which) |
+| NITYMED | real night-driving videos with microsleeps | system test of the full pipeline (logs, events, timelines) |
 
-## Datasets
+FL3D labels are mapped `alert → open`, `microsleep → closed`; `yawning` frames are left out because the eye state is not defined there. Datasets are not included in this repository. CEW is for research use only and must not be redistributed; NITYMED/FL3D must be cited as their pages ask.
 
-The datasets are **not** included in this repository.
+## Demo logic (`demo.py`)
 
-- **MRL Eye Dataset:** http://mrl.cs.vsb.cz/eyedataset
-- **CEW (Closed Eyes in the Wild):** for research use only and may not be redistributed. Request it from the authors' page: https://parnec.nuaa.edu.cn/_upload/tpl/02/db/731/template731/pages/xtan/ClosedEyeDatabases.html
+| Item | How |
+|---|---|
+| Crop scale, threshold, hysteresis | read from `config/demo_config.json`, the same values the notebook used for testing; threshold = best balanced accuracy on validation, hysteresis band = thresholds within 0.5 points of the best (±0.02 … ±0.10) |
+| Smoothing | time-based: `s += (1 − exp(−dt/τ)) · (p − s)`, τ = 0.10 s, so behaviour does not depend on FPS |
+| Events | closure < 0.5 s = blink, 0.5–1.5 s = microsleep, ≥ 1.5 s = long closure (alarm while it lasts); every event is logged with its duration |
+| PERCLOS | time-weighted share of closed time in the last 60 s (face visible only); shown on screen, red above 15% (configurable) |
+| No face | a closure in progress is ended without counting it; no face for 2 s raises a separate alarm (head dropped, driver out of view) |
+| Log | `logs/frames_<time>.csv`: timestamp, t_s, frame, face, p_open_raw, p_open_smoothed, ear, state, closure_s, perclos, event, alarm; `logs/events_<time>.json`: counts, events, config |
 
 ## References
 
-1. F. Song, X. Tan, X. Liu, S. Chen. *Eyes Closeness Detection from Still Images with Multi-scale Histograms of Principal Oriented Gradients.* Pattern Recognition, 2014. (CEW dataset)
+1. F. Song, X. Tan, X. Liu, S. Chen. *Eyes Closeness Detection from Still Images with Multi-scale Histograms of Principal Oriented Gradients.* Pattern Recognition, 2014. (CEW)
 2. A. Howard et al. *Searching for MobileNetV3.* ICCV 2019.
-3. Y. Kartynnik et al. *Real-time Facial Surface Geometry from Monocular Video on Mobile GPUs.* CVPR Workshops 2019. (MediaPipe face mesh)
+3. Y. Kartynnik et al. *Real-time Facial Surface Geometry from Monocular Video on Mobile GPUs.* CVPR Workshops 2019.
 4. R. Florez et al. *A CNN-Based Approach for Driver Drowsiness Detection by Real-Time Eye State Identification.* Applied Sciences 13(13), 7849, 2023.
 5. T. Soukupová, J. Čech. *Real-Time Eye Blink Detection using Facial Landmarks.* CVWW 2016. (EAR)
+6. NITYMED and FL3D: cite the papers listed on their dataset pages.
