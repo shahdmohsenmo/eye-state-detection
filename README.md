@@ -50,7 +50,8 @@ benchmark.py     measures the time of every pipeline stage on your computer
 requirements.txt
 split.csv        person-level train / val / test split of our dataset (path, label, person, split)
 models/          put the two model files here (see Setup)
-notebooks/       Colab notebook: model v2, CEW test, EAR comparison, final model v3
+notebooks/       Eye_State_Detection_Full.ipynb: the whole project in one clean Colab notebook;
+                 v2_cew_ear_v3.ipynb: the original experiment notebook
 results/         confusion matrices, training curves, EAR histogram
 ```
 
